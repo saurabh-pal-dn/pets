@@ -7,7 +7,12 @@
  * in-place replacement — no stacking, no scrolling.
  */
 
-import { getImageDimensions, allocateImageId, calculateImageRows, getCellDimensions } from "@mariozechner/pi-tui";
+import {
+  getImageDimensions,
+  allocateImageId,
+  calculateImageRows,
+  getCellDimensions,
+} from "@mariozechner/pi-tui";
 import type { AnimationFrame, PetState } from "./types.js";
 import type { WidgetRef } from "./PetRenderer.js";
 
@@ -50,7 +55,15 @@ function encodeKittyFrame(
   // a=T: transmit & display (replaces old placement of same imageId)
   // C=0: don't move cursor after placing
   // q=2: no display feedback
-  const params = [`a=T`, `C=0`, `f=100`, `q=2`, `c=${cols}`, `r=${rows}`, `i=${imageId}`];
+  const params = [
+    `a=T`,
+    `C=0`,
+    `f=100`,
+    `q=2`,
+    `c=${cols}`,
+    `r=${rows}`,
+    `i=${imageId}`,
+  ];
 
   const CHUNK_SIZE = 4096;
   if (base64Data.length <= CHUNK_SIZE) {
@@ -105,7 +118,10 @@ export function createPetImageWidget(
         }
 
         const base64 = frames[frame.frameIndex % frames.length]!;
-        const dims = getImageDimensions(base64, "image/png") ?? { widthPx: 192, heightPx: 208 };
+        const dims = getImageDimensions(base64, "image/png") ?? {
+          widthPx: 192,
+          heightPx: 208,
+        };
 
         // Calculate columns/rows — memoize for stable widget height
         const maxCols = Math.min(24, Math.floor(width * 0.6));
@@ -133,7 +149,6 @@ export function createPetImageWidget(
         const f = Math.round(100 - state.attributes.hunger);
         const e = Math.round(state.attributes.energy);
         lines.push(`♥${hbar(h)} 🍖${hbar(f)} ⚡${hbar(e)}`);
-
         return lines;
       },
 

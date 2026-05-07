@@ -40,12 +40,16 @@ export type PetDisplayMessage = PetDisplayFrame | PetDisplayCommand;
 export class PetDisplayServer {
   private socketPath: string;
   private server: ReturnType<typeof createServer> | null = null;
-  private clients: Set<ReturnType<typeof createServer>["clients"] extends Set<infer T> ? T : never> = new Set();
+  private clients: Set<
+    ReturnType<typeof createServer>["clients"] extends Set<infer T> ? T : never
+  > = new Set();
   private onClientConnected?: () => void;
   private onClientDisconnected?: () => void;
 
   constructor(socketPath?: string) {
-    this.socketPath = socketPath ?? join(tmpdir(), `pi-pets-${randomBytes(4).toString("hex")}.sock`);
+    this.socketPath =
+      socketPath ??
+      join(tmpdir(), `pi-pets-${randomBytes(4).toString("hex")}.sock`);
   }
 
   get path(): string {
@@ -59,18 +63,22 @@ export class PetDisplayServer {
   async start(): Promise<void> {
     // Clean up stale socket
     if (existsSync(this.socketPath)) {
-      try { unlinkSync(this.socketPath); } catch { /* ignore */ }
+      try {
+        unlinkSync(this.socketPath);
+      } catch {
+        /* ignore */
+      }
     }
 
     return new Promise((resolve, reject) => {
       this.server = createServer((socket) => {
         this.clients.add(socket);
-        console.log("[pi-pets] Display client connected");
+        // console.log("[pi-pets] Display client connected");
         this.onClientConnected?.();
 
         socket.on("close", () => {
           this.clients.delete(socket);
-          console.log("[pi-pets] Display client disconnected");
+          // console.log("[pi-pets] Display client disconnected");
           this.onClientDisconnected?.();
         });
 
@@ -82,7 +90,7 @@ export class PetDisplayServer {
 
       this.server.on("error", reject);
       this.server.listen(this.socketPath, () => {
-        console.log("[pi-pets] Display server listening on", this.socketPath);
+        // console.log("[pi-pets] Display server listening on", this.socketPath);
         resolve();
       });
     });
@@ -99,8 +107,12 @@ export class PetDisplayServer {
     this.broadcast({ type: "close" });
   }
 
-  onConnect(cb: () => void): void { this.onClientConnected = cb; }
-  onDisconnect(cb: () => void): void { this.onClientDisconnected = cb; }
+  onConnect(cb: () => void): void {
+    this.onClientConnected = cb;
+  }
+  onDisconnect(cb: () => void): void {
+    this.onClientDisconnected = cb;
+  }
 
   async stop(): Promise<void> {
     this.sendClose();
@@ -110,7 +122,11 @@ export class PetDisplayServer {
     this.clients.clear();
     this.server?.close();
     if (existsSync(this.socketPath)) {
-      try { unlinkSync(this.socketPath); } catch { /* ignore */ }
+      try {
+        unlinkSync(this.socketPath);
+      } catch {
+        /* ignore */
+      }
     }
     console.log("[pi-pets] Display server stopped");
   }
@@ -118,7 +134,11 @@ export class PetDisplayServer {
   private broadcast(msg: PetDisplayMessage): void {
     const json = JSON.stringify(msg) + "\n";
     for (const socket of this.clients) {
-      try { socket.write(json); } catch { /* client gone */ }
+      try {
+        socket.write(json);
+      } catch {
+        /* client gone */
+      }
     }
   }
 }

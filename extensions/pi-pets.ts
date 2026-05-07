@@ -16,9 +16,18 @@ import { ImageCache } from "../src/PetImageRenderer.js";
 import { PetDisplayServer } from "../src/PetDisplayServer.js";
 import { loadSpriteSheet } from "../src/SpriteSheetLoader.js";
 import { registerCommands } from "../src/commands.js";
-import { getImageDimensions, calculateImageRows, getCellDimensions } from "@mariozechner/pi-tui";
+import {
+  getImageDimensions,
+  calculateImageRows,
+  getCellDimensions,
+} from "@mariozechner/pi-tui";
+import { spawn } from "node:child_process";
 import type { WidgetRef } from "../src/PetRenderer.js";
-import type { PetDefinition, PetStimulus, ImageSpriteSet } from "../src/types.js";
+import type {
+  PetDefinition,
+  PetStimulus,
+  ImageSpriteSet,
+} from "../src/types.js";
 import type { PetDisplayFrame } from "../src/PetDisplayServer.js";
 
 const WIDGET_KEY = "pi-pets";
@@ -34,6 +43,8 @@ export default async function (pi: ExtensionAPI) {
 
   const widgetRef: WidgetRef = { tui: null };
   let widgetFactory: ReturnType<typeof createPetWidgetRenderer> | null = null;
+  let lastCtx: { ui: { setWidget: (k: string, f: unknown) => void } } | null =
+    null;
 
   // Terminal capabilities (detected lazily)
   let terminalHasImages: boolean | null = null;
@@ -47,8 +58,12 @@ export default async function (pi: ExtensionAPI) {
   async function startDisplayServer(): Promise<void> {
     if (displayServer) return;
     displayServer = new PetDisplayServer();
-    displayServer.onConnect(() => { /* client connected */ });
-    displayServer.onDisconnect(() => { /* client disconnected */ });
+    displayServer.onConnect(() => {
+      clearWidget();
+    });
+    displayServer.onDisconnect(() => {
+      if (lastCtx) mountWidget(lastCtx);
+    });
     await displayServer.start();
   }
 
@@ -106,26 +121,63 @@ export default async function (pi: ExtensionAPI) {
     return `npx tsx ${cwd}/bin/pi-pets-display.ts ${displayServer.path}`;
   }
 
+  function autoSpawnDisplay(): void {
+    if (!displayServer) return;
+    const cmd = getDisplayCommand();
+    console.log("[pi-pets] Auto-spawning display terminal...");
+    const proc = spawn("ghostty", [
+      "--window-width=25",
+      "--window-height=12",
+      "--title=pi-pets",
+      "-e", "sh", "-c", cmd,
+    ], {
+      detached: true,
+      stdio: "ignore",
+    });
+    proc.on("error", () => {
+      console.log("[pi-pets] Could not auto-spawn. Run manually:", cmd);
+    });
+    proc.unref();
+  }
+
   // ── Widget/display mounting ───────────────────────────────
 
-  function mountWidget(ctx: { ui: { setWidget: (k: string, f: unknown) => void } }) {
+  function mountWidget(ctx: {
+    ui: { setWidget: (k: string, f: unknown) => void };
+  }) {
     if (!stateMachine || !animationEngine || !currentPet) return;
 
-    const isImagePet = currentPet.spriteType === "image";
+    // Never show widget in pi when display server has clients
+    if (displayServer?.hasClients) {
+      // Clear any existing widget
+      try {
+        ctx.ui.setWidget(WIDGET_KEY, undefined);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
 
-    if (isImagePet && terminalHasImages === true) {
-      // For image pets: use display server (no widget)
-      ctx.ui.setWidget(WIDGET_KEY, undefined as unknown as Parameters<typeof ctx.ui.setWidget>[1]);
-    } else {
-      // ASCII widget
-      widgetFactory = createPetWidgetRenderer(
-        () => animationEngine!.getCurrentFrame(),
-        () => currentPet!,
-        () => stateMachine!.getState(),
-        widgetRef,
-        { placement: "aboveEditor" },
+    // ASCII widget fallback (when no display client is connected)
+    widgetFactory = createPetWidgetRenderer(
+      () => animationEngine!.getCurrentFrame(),
+      () => currentPet!,
+      () => stateMachine!.getState(),
+      widgetRef,
+      { placement: "aboveEditor" },
+    );
+    ctx.ui.setWidget(WIDGET_KEY, widgetFactory);
+  }
+
+  function clearWidget(): void {
+    if (!lastCtx) return;
+    try {
+      (lastCtx.ui.setWidget as (k: string, f: unknown) => void)(
+        WIDGET_KEY,
+        undefined,
       );
-      ctx.ui.setWidget(WIDGET_KEY, widgetFactory);
+    } catch {
+      /* ignore type issues */
     }
   }
 
@@ -187,7 +239,11 @@ export default async function (pi: ExtensionAPI) {
         if (firstFrame && firstFrame[0]) {
           const dims = getImageDimensions(firstFrame[0], "image/png");
           if (dims) {
-            frameRows = calculateImageRows(dims, frameCols, getCellDimensions());
+            frameRows = calculateImageRows(
+              dims,
+              frameCols,
+              getCellDimensions(),
+            );
           }
         }
         return cache;
@@ -205,9 +261,12 @@ export default async function (pi: ExtensionAPI) {
         try {
           const { readFileSync } = await import("node:fs");
           base64Frames.push(readFileSync(filePath).toString("base64"));
-        } catch { /* skip missing */ }
+        } catch {
+          /* skip missing */
+        }
       }
-      if (base64Frames.length > 0) cache.set(emotion, base64Frames, "image/png");
+      if (base64Frames.length > 0)
+        cache.set(emotion, base64Frames, "image/png");
     }
     return cache;
   }
@@ -216,13 +275,19 @@ export default async function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     if (!ctx.hasUI) return;
+    lastCtx = ctx as typeof lastCtx;
 
     // Detect terminal capabilities (TUI is now initialized)
     if (terminalHasImages === null) {
       try {
         const caps = detectCapabilities();
         terminalHasImages = caps.images !== null;
-        console.log("[pi-pets] Terminal: images=" + caps.images + " trueColor=" + caps.trueColor);
+        console.log(
+          "[pi-pets] Terminal: images=" +
+            caps.images +
+            " trueColor=" +
+            caps.trueColor,
+        );
       } catch {
         terminalHasImages = false;
       }
@@ -242,7 +307,11 @@ export default async function (pi: ExtensionAPI) {
     // Restore state
     let savedState: Record<string, unknown> | undefined;
     for (const entry of ctx.sessionManager.getEntries()) {
-      const custom = entry as { type: string; customType?: string; data?: { state?: unknown; petId?: string } };
+      const custom = entry as {
+        type: string;
+        customType?: string;
+        data?: { state?: unknown; petId?: string };
+      };
       if (custom.type === "custom" && custom.customType === PERSIST_KEY) {
         savedState = custom.data as Record<string, unknown> | undefined;
         break;
@@ -250,11 +319,15 @@ export default async function (pi: ExtensionAPI) {
     }
 
     const savedPetId = savedState?.petId as string | undefined;
-    currentPet = savedPetId ? registry.get(savedPetId) ?? defaultPet : defaultPet;
+    currentPet = savedPetId
+      ? (registry.get(savedPetId) ?? defaultPet)
+      : defaultPet;
 
     // Init state machine
     stateMachine = savedState?.state
-      ? PetStateMachine.fromJSON(savedState.state as Parameters<typeof PetStateMachine.fromJSON>[0])
+      ? PetStateMachine.fromJSON(
+          savedState.state as Parameters<typeof PetStateMachine.fromJSON>[0],
+        )
       : new PetStateMachine();
 
     // Init image cache & display server for image pets
@@ -278,22 +351,37 @@ export default async function (pi: ExtensionAPI) {
       animationEngine?.setEmotion(emotion, 0);
     });
 
-    mountWidget(ctx);
+    // Don't mount widget yet — only if display client disconnects
+
+    // Auto-spawn the display terminal
+    autoSpawnDisplay();
+
     applyStimulus({ type: "session_start" });
 
-    const mode = currentPet.spriteType === "image" && terminalHasImages === true ? "🖼️" : "📝";
-    ctx.ui.notify(
-      `${mode} pi-pets loaded! ${currentPet.name} is ready.\n📺 Display: ${getDisplayCommand()}`,
-      "info",
-    );
+    // const mode =
+    //   currentPet.spriteType === "image" && terminalHasImages === true
+    //     ? "🖼️"
+    //     : "📝";
+    // ctx.ui.notify(
+    //   `${mode} pi-pets loaded! ${currentPet.name} is ready.`,
+    //   "info",
+    // );
   });
 
   // ── Agent Events ──────────────────────────────────────────
 
-  pi.on("agent_start", () => { applyStimulus({ type: "agent_start" }); });
-  pi.on("agent_end", () => { applyStimulus({ type: "agent_end" }); });
-  pi.on("turn_start", () => { applyStimulus({ type: "turn_start" }); });
-  pi.on("turn_end", () => { applyStimulus({ type: "turn_end" }); });
+  pi.on("agent_start", () => {
+    applyStimulus({ type: "agent_start" });
+  });
+  pi.on("agent_end", () => {
+    applyStimulus({ type: "agent_end" });
+  });
+  pi.on("turn_start", () => {
+    applyStimulus({ type: "turn_start" });
+  });
+  pi.on("turn_end", () => {
+    applyStimulus({ type: "turn_end" });
+  });
 
   pi.on("message_update", (event) => {
     if (
@@ -315,12 +403,22 @@ export default async function (pi: ExtensionAPI) {
     });
   });
 
-  pi.on("model_select", () => { applyStimulus({ type: "model_change" }); });
+  pi.on("model_select", () => {
+    applyStimulus({ type: "model_change" });
+  });
   pi.on("thinking_level_select", (event) => {
     const intensity =
-      event.level === "xhigh" ? 1.0 : event.level === "high" ? 0.8 :
-      event.level === "medium" ? 0.6 : event.level === "low" ? 0.4 :
-      event.level === "minimal" ? 0.2 : 0;
+      event.level === "xhigh"
+        ? 1.0
+        : event.level === "high"
+          ? 0.8
+          : event.level === "medium"
+            ? 0.6
+            : event.level === "low"
+              ? 0.4
+              : event.level === "minimal"
+                ? 0.2
+                : 0;
     applyStimulus({ type: "thinking_level_change", intensity });
   });
 
@@ -355,17 +453,20 @@ export default async function (pi: ExtensionAPI) {
       return animationEngine;
     },
     switchPet: async (id: string) => await switchPet(id),
-    getState: () => stateMachine?.getState() ?? {
-      emotion: "idle" as const,
-      attributes: { happiness: 0, hunger: 0, energy: 0, affection: 0 },
-      customName: null,
-      lastUpdate: 0,
-      lastInteraction: 0,
-      visible: true,
-      totalActiveTime: 0,
-    },
+    getState: () =>
+      stateMachine?.getState() ?? {
+        emotion: "idle" as const,
+        attributes: { happiness: 0, hunger: 0, energy: 0, affection: 0 },
+        customName: null,
+        lastUpdate: 0,
+        lastInteraction: 0,
+        visible: true,
+        totalActiveTime: 0,
+      },
     widgetKey: WIDGET_KEY,
-    mountWidget: (ctx: { ui: { setWidget: (k: string, f: unknown) => void } }) => {
+    mountWidget: (ctx: {
+      ui: { setWidget: (k: string, f: unknown) => void };
+    }) => {
       mountWidget(ctx);
     },
     // Image display helpers
@@ -376,9 +477,20 @@ export default async function (pi: ExtensionAPI) {
         await startDisplayServer();
       }
     },
-    stopDisplay: async () => { await stopDisplayServer(); },
+    stopDisplay: async () => {
+      await stopDisplayServer();
+    },
+    autoSpawnDisplay: () => {
+      autoSpawnDisplay();
+    },
   });
 
-  console.log("[pi-pets] Extension loaded. Images: " +
-    (terminalHasImages === null ? "detecting..." : terminalHasImages ? "enabled" : "unavailable"));
+  console.log(
+    "[pi-pets] Extension loaded. Images: " +
+      (terminalHasImages === null
+        ? "detecting..."
+        : terminalHasImages
+          ? "enabled"
+          : "unavailable"),
+  );
 }

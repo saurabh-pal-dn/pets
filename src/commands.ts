@@ -15,10 +15,13 @@ export interface CommandDeps {
   switchPet: (id: string) => Promise<boolean>;
   getState: () => PetState;
   widgetKey: string;
-  mountWidget: (ctx: { ui: { setWidget: (key: string, factory: unknown) => void } }) => void;
+  mountWidget: (ctx: {
+    ui: { setWidget: (key: string, factory: unknown) => void };
+  }) => void;
   getDisplayCommand: () => string;
   startDisplay: () => Promise<void>;
   stopDisplay: () => Promise<void>;
+  autoSpawnDisplay: () => void;
 }
 
 export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
@@ -43,13 +46,20 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
   const getDisplayCommand = deps.getDisplayCommand;
   const startDisplay = deps.startDisplay;
   const stopDisplay = deps.stopDisplay;
+  const autoSpawnDisplay = deps.autoSpawnDisplay;
   // stateMachine and animationEngine accessed via getSafeDeps()
 
   // ── /pet ──────────────────────────────────────────────────
   pi.registerCommand("pet", {
     description: "Show pet status and available actions",
     handler: async (_args, ctx) => {
-      if (!getSafeDeps().ok) { ctx.ui.notify("pi-pets not initialized yet. Start a session first.", "warning"); return; }
+      if (!getSafeDeps().ok) {
+        ctx.ui.notify(
+          "pi-pets not initialized yet. Start a session first.",
+          "warning",
+        );
+        return;
+      }
       const state = getState();
       const petName = state.customName ?? "Pet";
       const a = state.attributes;
@@ -62,7 +72,9 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
           ``,
           `Available: /pet status | feed | play | pet | switch <name> | list | hide | show | rename <name>`,
           cmd ? `\n📺 Display: ${cmd}` : "",
-        ].filter(Boolean).join("\n"),
+        ]
+          .filter(Boolean)
+          .join("\n"),
         "info",
       );
     },
@@ -72,10 +84,19 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
   pi.registerCommand("pet:status", {
     description: "Show detailed pet status",
     handler: async (_args, ctx) => {
-      if (!getSafeDeps().ok) { ctx.ui.notify("pi-pets not initialized yet. Start a session first.", "warning"); return; }
+      if (!getSafeDeps().ok) {
+        ctx.ui.notify(
+          "pi-pets not initialized yet. Start a session first.",
+          "warning",
+        );
+        return;
+      }
       const state = getState();
       const safe = getSafeDeps();
-      const petName = state.customName ?? (safe.ok ? safe.stateMachine.getState().customName : null) ?? "Pet";
+      const petName =
+        state.customName ??
+        (safe.ok ? safe.stateMachine.getState().customName : null) ??
+        "Pet";
       const cmd = getDisplayCommand();
 
       ctx.ui.notify(
@@ -88,7 +109,9 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
           `💕 Affection:  ${bar(state.attributes.affection)} ${state.attributes.affection}%`,
           `Active time: ${formatDuration(state.totalActiveTime)}`,
           cmd ? `\n📺 Display command:\n  ${cmd}` : "",
-        ].filter(Boolean).join("\n"),
+        ]
+          .filter(Boolean)
+          .join("\n"),
         "info",
       );
     },
@@ -99,10 +122,20 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
     description: "Feed your pet",
     handler: async (_args, ctx) => {
       const safe = getSafeDeps();
-      if (!safe.ok) { ctx.ui.notify("pi-pets not initialized yet. Start a session first.", "warning"); return; }
+      if (!safe.ok) {
+        ctx.ui.notify(
+          "pi-pets not initialized yet. Start a session first.",
+          "warning",
+        );
+        return;
+      }
       const emotion = safe.stateMachine.applyStimulus({ type: "user_feed" });
       safe.stateMachine.setEmotion(emotion);
-      safe.animationEngine.applyReaction({ emotion, duration: 3000, priority: 6 });
+      safe.animationEngine.applyReaction({
+        emotion,
+        duration: 3000,
+        priority: 6,
+      });
       ctx.ui.notify("🍖 Om nom nom! Your pet is eating happily.", "success");
     },
   });
@@ -112,10 +145,20 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
     description: "Play with your pet",
     handler: async (_args, ctx) => {
       const safe = getSafeDeps();
-      if (!safe.ok) { ctx.ui.notify("pi-pets not initialized yet. Start a session first.", "warning"); return; }
+      if (!safe.ok) {
+        ctx.ui.notify(
+          "pi-pets not initialized yet. Start a session first.",
+          "warning",
+        );
+        return;
+      }
       const emotion = safe.stateMachine.applyStimulus({ type: "user_play" });
       safe.stateMachine.setEmotion(emotion);
-      safe.animationEngine.applyReaction({ emotion, duration: 4000, priority: 6 });
+      safe.animationEngine.applyReaction({
+        emotion,
+        duration: 4000,
+        priority: 6,
+      });
       ctx.ui.notify("🎾 Your pet is playing happily!", "success");
     },
   });
@@ -125,10 +168,20 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
     description: "Pet your pet (increases affection)",
     handler: async (_args, ctx) => {
       const safe = getSafeDeps();
-      if (!safe.ok) { ctx.ui.notify("pi-pets not initialized yet. Start a session first.", "warning"); return; }
+      if (!safe.ok) {
+        ctx.ui.notify(
+          "pi-pets not initialized yet. Start a session first.",
+          "warning",
+        );
+        return;
+      }
       const emotion = safe.stateMachine.applyStimulus({ type: "user_pet" });
       safe.stateMachine.setEmotion(emotion);
-      safe.animationEngine.applyReaction({ emotion, duration: 2000, priority: 6 });
+      safe.animationEngine.applyReaction({
+        emotion,
+        duration: 2000,
+        priority: 6,
+      });
       ctx.ui.notify("♥ Your pet appreciates the affection!", "success");
     },
   });
@@ -138,7 +191,13 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
     description: "Switch to a different pet",
     handler: async (args, ctx) => {
       const safe = getSafeDeps();
-      if (!safe.ok) { ctx.ui.notify("pi-pets not initialized yet. Start a session first.", "warning"); return; }
+      if (!safe.ok) {
+        ctx.ui.notify(
+          "pi-pets not initialized yet. Start a session first.",
+          "warning",
+        );
+        return;
+      }
       const petId = args?.trim();
       if (!petId) {
         const pets = registry.list();
@@ -146,7 +205,10 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
           ctx.ui.notify("No pets available.", "error");
           return;
         }
-        ctx.ui.notify(`Available pets: ${pets.join(", ")}\nUse /pet switch <name>`, "info");
+        ctx.ui.notify(
+          `Available pets: ${pets.join(", ")}\nUse /pet switch <name>`,
+          "info",
+        );
         return;
       }
 
@@ -158,16 +220,17 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
 
         const cmd = getDisplayCommand();
         if (cmd) {
-          ctx.ui.notify(
-            `✨ Switched to ${pet.name}!\n📺 Display: ${cmd}`,
-            "success",
-          );
+          ctx.ui.notify(`✨ Switched to ${pet.name}!`, "success");
+          // ctx.ui.notify(`📺 Display: ${cmd}`, "info");
         } else {
           ctx.ui.notify(`✨ Switched to ${pet.name}!`, "success");
         }
       } else {
         const available = registry.list().join(", ");
-        ctx.ui.notify(`Pet "${petId}" not found. Available: ${available}`, "error");
+        ctx.ui.notify(
+          `Pet "${petId}" not found. Available: ${available}`,
+          "error",
+        );
       }
     },
   });
@@ -183,9 +246,11 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
         return;
       }
 
-      const currentPet = deps.stateMachine.getState().customName ?? registry.getDefault()?.name;
+      const currentPet =
+        deps.stateMachine.getState().customName ?? registry.getDefault()?.name;
       const lines = pets.map(
-        (p) => `${p.id === registry.getDefault()?.id && currentPet === p.name ? "★" : " "} ${p.id.padEnd(12)} ${p.name.padEnd(16)} ${p.description}`,
+        (p) =>
+          `${p.id === registry.getDefault()?.id && currentPet === p.name ? "★" : " "} ${p.id.padEnd(12)} ${p.name.padEnd(16)} ${p.description}`,
       );
       ctx.ui.notify(`Available pets:\n${lines.join("\n")}`, "info");
     },
@@ -196,13 +261,19 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
     description: "Hide the pet (close display or widget)",
     handler: async (_args, ctx) => {
       const safe = getSafeDeps();
-      if (!safe.ok) { ctx.ui.notify("pi-pets not initialized yet.", "warning"); return; }
+      if (!safe.ok) {
+        ctx.ui.notify("pi-pets not initialized yet.", "warning");
+        return;
+      }
       safe.stateMachine.setVisible(false);
 
       // Close display server if running
       await stopDisplay();
       // Remove widget
-      ctx.ui.setWidget(widgetKey, undefined as unknown as Parameters<typeof ctx.ui.setWidget>[1]);
+      ctx.ui.setWidget(
+        widgetKey,
+        undefined as unknown as Parameters<typeof ctx.ui.setWidget>[1],
+      );
       ctx.ui.notify("Pet hidden. Use /pet show to bring it back.", "info");
     },
   });
@@ -212,17 +283,18 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
     description: "Show the pet display / widget",
     handler: async (_args, ctx) => {
       const safe = getSafeDeps();
-      if (!safe.ok) { ctx.ui.notify("pi-pets not initialized yet.", "warning"); return; }
+      if (!safe.ok) {
+        ctx.ui.notify("pi-pets not initialized yet.", "warning");
+        return;
+      }
       safe.stateMachine.setVisible(true);
 
       const cmd = getDisplayCommand();
       if (cmd) {
-        // Image pet — show the display command
+        // Image pet — auto-spawn display
         await startDisplay();
-        ctx.ui.notify(
-          `📺 Run this in another Ghostty terminal:\n  ${cmd}`,
-          "info",
-        );
+        autoSpawnDisplay();
+        ctx.ui.notify(`📺 Spawning pet display...`, "info");
       } else {
         // ASCII pet — remount widget
         mountWidget(ctx);
@@ -236,7 +308,13 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
     description: "Give your pet a custom name",
     handler: async (args, ctx) => {
       const safe = getSafeDeps();
-      if (!safe.ok) { ctx.ui.notify("pi-pets not initialized yet. Start a session first.", "warning"); return; }
+      if (!safe.ok) {
+        ctx.ui.notify(
+          "pi-pets not initialized yet. Start a session first.",
+          "warning",
+        );
+        return;
+      }
       const newName = args?.trim();
       if (!newName) {
         ctx.ui.notify("Usage: /pet rename <name>", "error");
