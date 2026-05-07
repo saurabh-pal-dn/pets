@@ -52,6 +52,7 @@ export default async function (pi: ExtensionAPI) {
   // Memoized dimensions for frame sending
   let frameCols = 24;
   let frameRows = 12;
+  let suppressFrames = false;
 
   // ── Display server management ─────────────────────────────
 
@@ -74,6 +75,7 @@ export default async function (pi: ExtensionAPI) {
   }
 
   function sendDisplayFrame(): void {
+    if (suppressFrames) return;
     if (!displayServer || !displayServer.hasClients) return;
     if (!animationEngine || !stateMachine || !currentPet) return;
 
@@ -125,15 +127,22 @@ export default async function (pi: ExtensionAPI) {
     if (!displayServer) return;
     const cmd = getDisplayCommand();
     console.log("[pi-pets] Auto-spawning display terminal...");
-    const proc = spawn("ghostty", [
-      "--window-width=25",
-      "--window-height=12",
-      "--title=pi-pets",
-      "-e", "sh", "-c", cmd,
-    ], {
-      detached: true,
-      stdio: "ignore",
-    });
+    const proc = spawn(
+      "ghostty",
+      [
+        "--window-width=25",
+        "--window-height=13",
+        "--title=pi-pets",
+        "-e",
+        "sh",
+        "-c",
+        cmd,
+      ],
+      {
+        detached: true,
+        stdio: "ignore",
+      },
+    );
     proc.on("error", () => {
       console.log("[pi-pets] Could not auto-spawn. Run manually:", cmd);
     });
@@ -209,6 +218,12 @@ export default async function (pi: ExtensionAPI) {
     currentPet = pet;
     animationEngine?.switchPet(pet);
     stateMachine?.applyStimulus({ type: "user_switch" });
+
+    // Flush old images before showing new pet
+    suppressFrames = true;
+    displayServer?.sendClear();
+    await new Promise((r) => setTimeout(r, 300));
+    suppressFrames = false;
 
     // Manage image cache
     if (isImage && terminalHasImages === true) {

@@ -107,6 +107,11 @@ export class PetDisplayServer {
     this.broadcast({ type: "close" });
   }
 
+  /** Clear all images and screen on the display */
+  sendClear(): void {
+    this.broadcast({ type: "clear" });
+  }
+
   onConnect(cb: () => void): void {
     this.onClientConnected = cb;
   }
