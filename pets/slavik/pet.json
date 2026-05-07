@@ -1,0 +1,17 @@
+{
+  "id": "slavik",
+  "name": "Slavik",
+  "description": "A mischievous squat goblin in a black three-stripe tracksuit.",
+  "author": "ahtoshkaa",
+  "spriteType": "image",
+  "frameWidth": 192,
+  "frameHeight": 208,
+  "animationSpeed": 180,
+  "spritesheet": "spritesheet.webp",
+  "spritesheetConfig": {
+    "cols": 8,
+    "rows": 9,
+    "framesPerRow": [6, 8, 8, 4, 5, 8, 6, 6, 6],
+    "rowEmotions": ["idle", "working", "thinking", "excited", "success", "error", "sad", "happy", "sleeping"]
+  }
+}

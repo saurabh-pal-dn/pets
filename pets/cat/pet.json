@@ -1,0 +1,32 @@
+{
+  "id": "cat",
+  "name": "Cat",
+  "description": "A curious feline coding companion",
+  "author": "pi-pets",
+  "frameWidth": 20,
+  "frameHeight": 5,
+  "animationSpeed": 500,
+  "behaviors": {
+    "idleChance": 0.3,
+    "idleInterval": 15000
+  },
+  "sprites": {
+    "idle":        { "file": "sprites/idle.txt", "loop": true },
+    "happy":       { "file": "sprites/happy.txt", "frameDuration": 400, "loop": true },
+    "thinking":    { "file": "sprites/thinking.txt", "frameDuration": 600, "loop": true },
+    "working":     { "file": "sprites/working.txt", "frameDuration": 300, "loop": true },
+    "coding":      { "file": "sprites/coding.txt", "frameDuration": 300, "loop": true },
+    "success":     { "file": "sprites/success.txt", "frameDuration": 300, "loop": false },
+    "error":       { "file": "sprites/error.txt", "frameDuration": 500, "loop": true },
+    "sad":         { "file": "sprites/sad.txt", "frameDuration": 600, "loop": true },
+    "excited":     { "file": "sprites/excited.txt", "frameDuration": 200, "loop": true },
+    "sleepy":      { "file": "sprites/sleepy.txt", "frameDuration": 800, "loop": true },
+    "hungry":      { "file": "sprites/hungry.txt", "frameDuration": 600, "loop": true },
+    "curious":     { "file": "sprites/curious.txt", "frameDuration": 400, "loop": true },
+    "shocked":     { "file": "sprites/shocked.txt", "frameDuration": 400, "loop": true },
+    "greeting":    { "file": "sprites/greeting.txt", "frameDuration": 300, "loop": false },
+    "sleeping":    { "file": "sprites/sleeping.txt", "frameDuration": 1000, "loop": true },
+    "eating":      { "file": "sprites/eating.txt", "frameDuration": 400, "loop": true },
+    "playing":     { "file": "sprites/playing.txt", "frameDuration": 300, "loop": true }
+  }
+}

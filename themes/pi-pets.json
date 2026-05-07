@@ -1,0 +1,12 @@
+{
+  "name": "pi-pets",
+  "colors": {
+    "petStatusGood": "#4ade80",
+    "petStatusWarn": "#fbbf24",
+    "petStatusBad": "#f87171",
+    "petAccent": "#c084fc",
+    "petName": "#e2e8f0",
+    "petSprite": "#94a3b8",
+    "petBg": "#1e293b"
+  }
+}

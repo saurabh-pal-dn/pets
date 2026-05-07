@@ -1,0 +1,7 @@
+Sprite Sheet Standard & Implementation Logic
+• Grid: 8 columns (max) x 9 rows.
+• Dimensions: Frame Width = Image Width / 8 | Frame Height = Image Height / 9.
+• Extraction: X = col * Frame Width | Y = row * Frame Height.
+• Frame Counts per Row (0-indexed): • Row 0 (Idle): 6 frames • Row 1 (Walk): 8 frames • Row 2 (Run): 8 frames • Row 3 (Wave): 4 frames • Row 4 (Action 1): 5 frames • Row 5 (Action 2): 8 frames • Row 6 (Variant 1): 6 frames • Row 7 (Variant 2): 6 frames • Row 8 (Variant 3): 6 frames
+• Empty Frame Handling: Do not blindly loop 8 columns per row, or the sprite will draw empty transparent space and "blink".
+• Animation Loop Logic: Store the limits: const framesPerRow = [6, 8, 8, 4, 5, 8, 6, 6, 6]; Update frame: currentFrame = (currentFrame + 1) % framesPerRow[currentRow]; (This forces the loop to reset before hitting empty columns).

@@ -1,0 +1,17 @@
+{
+  "id": "homelander",
+  "name": "Homelander",
+  "description": "A compact digital pet version of Homelander from The Boys, with a smug expression and controlled flying motion.",
+  "author": "unknown",
+  "spriteType": "image",
+  "frameWidth": 192,
+  "frameHeight": 208,
+  "animationSpeed": 180,
+  "spritesheet": "spritesheet.webp",
+  "spritesheetConfig": {
+    "cols": 8,
+    "rows": 9,
+    "framesPerRow": [6, 8, 8, 4, 5, 8, 6, 6, 6],
+    "rowEmotions": ["idle", "working", "thinking", "excited", "success", "error", "sad", "happy", "sleeping"]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "id": "robot",
+  "name": "Robot",
+  "description": "A logical bot companion who loves code",
+  "author": "pi-pets",
+  "frameWidth": 20,
+  "frameHeight": 5,
+  "animationSpeed": 600,
+  "behaviors": {
+    "idleChance": 0.2,
+    "idleInterval": 20000
+  },
+  "sprites": {
+    "idle":        { "file": "sprites/idle.txt", "loop": true },
+    "happy":       { "file": "sprites/happy.txt", "frameDuration": 500, "loop": true },
+    "thinking":    { "file": "sprites/thinking.txt", "frameDuration": 400, "loop": true },
+    "working":     { "file": "sprites/working.txt", "frameDuration": 300, "loop": true },
+    "coding":      { "file": "sprites/working.txt", "frameDuration": 300, "loop": true },
+    "success":     { "file": "sprites/success.txt", "frameDuration": 400, "loop": false },
+    "error":       { "file": "sprites/error.txt", "frameDuration": 500, "loop": true },
+    "sad":         { "file": "sprites/sad.txt", "frameDuration": 700, "loop": true },
+    "excited":     { "file": "sprites/excited.txt", "frameDuration": 250, "loop": true },
+    "sleepy":      { "file": "sprites/sleepy.txt", "frameDuration": 900, "loop": true },
+    "hungry":      { "file": "sprites/hungry.txt", "frameDuration": 600, "loop": true },
+    "curious":     { "file": "sprites/curious.txt", "frameDuration": 400, "loop": true },
+    "shocked":     { "file": "sprites/shocked.txt", "frameDuration": 400, "loop": true },
+    "greeting":    { "file": "sprites/greeting.txt", "frameDuration": 400, "loop": false },
+    "sleeping":    { "file": "sprites/sleeping.txt", "frameDuration": 1000, "loop": true },
+    "eating":      { "file": "sprites/happy.txt", "frameDuration": 500, "loop": true },
+    "playing":     { "file": "sprites/success.txt", "frameDuration": 350, "loop": true }
+  }
+}

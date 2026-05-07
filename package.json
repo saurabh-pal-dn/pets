@@ -1,0 +1,44 @@
+{
+  "name": "pi-pets",
+  "version": "0.1.0",
+  "description": "Virtual pet companion for pi coding agent — a tiny friend that lives in your terminal and reacts to your coding activity",
+  "keywords": [
+    "pi-package",
+    "pi-pets",
+    "pet",
+    "companion",
+    "tamagotchi",
+    "virtual-pet"
+  ],
+  "author": "pi-pets",
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "themes": [
+      "./themes"
+    ],
+    "image": "https://raw.githubusercontent.com/pi-pets/pi-pets/main/assets/preview.png"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "typebox": "*"
+  },
+  "dependencies": {
+    "sharp": "^0.33.5"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "extensions/",
+    "src/",
+    "pets/",
+    "skills/",
+    "themes/"
+  ]
+}
