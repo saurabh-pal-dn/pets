@@ -14,6 +14,7 @@ import { PetRegistry } from "../src/PetRegistry.js";
 import { createPetWidgetRenderer } from "../src/PetRenderer.js";
 import { ImageCache } from "../src/PetImageRenderer.js";
 import { PetDisplayServer } from "../src/PetDisplayServer.js";
+import { OpenPetsClient } from "../src/OpenPetsClient.js";
 import { loadSpriteSheet } from "../src/SpriteSheetLoader.js";
 import { registerCommands } from "../src/commands.js";
 import {
@@ -40,6 +41,7 @@ export default async function (pi: ExtensionAPI) {
   let currentPet: PetDefinition | null = null;
   let imageCache: ImageCache | null = null;
   let displayServer: PetDisplayServer | null = null;
+  let openPets: OpenPetsClient | null = null;
 
   const widgetRef: WidgetRef = { tui: null };
   let widgetFactory: ReturnType<typeof createPetWidgetRenderer> | null = null;
@@ -76,6 +78,14 @@ export default async function (pi: ExtensionAPI) {
 
   function sendDisplayFrame(): void {
     if (suppressFrames) return;
+
+    // Send to OpenPets desktop app (preferred)
+    if (openPets?.isConnected && stateMachine) {
+      const emotion = animationEngine?.getCurrentEmotion() ?? "idle";
+      const state = OpenPetsClient.mapEmotion(emotion);
+      openPets.setState(state).catch(() => {});
+    }
+
     if (!displayServer || !displayServer.hasClients) return;
     if (!animationEngine || !stateMachine || !currentPet) return;
 
@@ -126,7 +136,7 @@ export default async function (pi: ExtensionAPI) {
   function autoSpawnDisplay(): void {
     if (!displayServer) return;
     const cmd = getDisplayCommand();
-    console.log("[pi-pets] Auto-spawning display terminal...");
+    // console.log("[pi-pets] Auto-spawning display terminal...");
     const proc = spawn(
       "ghostty",
       [
@@ -222,6 +232,10 @@ export default async function (pi: ExtensionAPI) {
     // Flush old images before showing new pet
     suppressFrames = true;
     displayServer?.sendClear();
+    // Also switch pet in OpenPets
+    if (openPets?.isConnected && pet._baseDir) {
+      openPets.selectPet(pet._baseDir).catch(() => {});
+    }
     await new Promise((r) => setTimeout(r, 300));
     suppressFrames = false;
 
@@ -297,12 +311,14 @@ export default async function (pi: ExtensionAPI) {
       try {
         const caps = detectCapabilities();
         terminalHasImages = caps.images !== null;
+        /*
         console.log(
           "[pi-pets] Terminal: images=" +
             caps.images +
             " trueColor=" +
             caps.trueColor,
         );
+        */
       } catch {
         terminalHasImages = false;
       }
@@ -351,6 +367,13 @@ export default async function (pi: ExtensionAPI) {
     }
     // Always start display server — all pets render there when client connected
     await startDisplayServer();
+
+    // Connect to OpenPets desktop app if installed
+    if (OpenPetsClient.isInstalled()) {
+      openPets = new OpenPetsClient();
+      const ok = await openPets.connect();
+      console.log("[pi-pets] OpenPets:", ok ? "connected" : "unavailable");
+    }
 
     // Init animation engine (frame callback → send display frame OR widget render)
     animationEngine = new PetAnimationEngine(currentPet, () => {
@@ -441,6 +464,8 @@ export default async function (pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async () => {
     await stopDisplayServer();
+    await openPets?.close();
+    openPets = null;
     if (stateMachine && currentPet) {
       pi.appendEntry(PERSIST_KEY, {
         state: stateMachine.toJSON(),
@@ -500,6 +525,7 @@ export default async function (pi: ExtensionAPI) {
     },
   });
 
+  /*
   console.log(
     "[pi-pets] Extension loaded. Images: " +
       (terminalHasImages === null
@@ -508,4 +534,5 @@ export default async function (pi: ExtensionAPI) {
           ? "enabled"
           : "unavailable"),
   );
+  */
 }

@@ -52,6 +52,10 @@ export { PetDisplayServer } from "./PetDisplayServer.js";
 export type { PetDisplayFrame, PetDisplayMessage, PetDisplayCommand } from "./PetDisplayServer.js";
 export { runDisplayClient } from "./PetDisplayClient.js";
 
+// OpenPets integration
+export { OpenPetsClient } from "./OpenPetsClient.js";
+export type { OpenPetsState, OpenPetsEvent } from "./OpenPetsClient.js";
+
 // Sprite sheet support
 export { loadSpriteSheet, loadImageFrames, STANDARD_SPRITESHEET, STANDARD_ROW_EMOTIONS } from "./SpriteSheetLoader.js";
 export type { SpriteSheetConfig } from "./SpriteSheetLoader.js";

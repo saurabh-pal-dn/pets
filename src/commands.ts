@@ -221,7 +221,7 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
         const cmd = getDisplayCommand();
         if (cmd) {
           ctx.ui.notify(`✨ Switched to ${pet.name}!`, "success");
-          // ctx.ui.notify(`📺 Display: ${cmd}`, "info");
+          ctx.ui.notify(`📺 Display: ${cmd}`, "success");
         } else {
           ctx.ui.notify(`✨ Switched to ${pet.name}!`, "success");
         }

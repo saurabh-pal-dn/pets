@@ -133,7 +133,7 @@ export class PetDisplayServer {
         /* ignore */
       }
     }
-    console.log("[pi-pets] Display server stopped");
+    // console.log("[pi-pets] Display server stopped");
   }
 
   private broadcast(msg: PetDisplayMessage): void {
