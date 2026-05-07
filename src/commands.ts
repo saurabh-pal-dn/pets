@@ -53,14 +53,16 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
       const state = getState();
       const petName = state.customName ?? "Pet";
       const a = state.attributes;
+      const cmd = getDisplayCommand();
 
       ctx.ui.notify(
         [
           `${petName} is feeling ${state.emotion}`,
           `♥ Happiness: ${a.happiness}%  🍖 Fullness: ${100 - a.hunger}%  ⚡ Energy: ${a.energy}%  💕 Affection: ${a.affection}%`,
           ``,
-          `Available: /pet status | feed | play | pet | switch <name> | list | hide | show | rename <name> | theme <name>`,
-        ].join("\n"),
+          `Available: /pet status | feed | play | pet | switch <name> | list | hide | show | rename <name>`,
+          cmd ? `\n📺 Display: ${cmd}` : "",
+        ].filter(Boolean).join("\n"),
         "info",
       );
     },
@@ -74,6 +76,7 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
       const state = getState();
       const safe = getSafeDeps();
       const petName = state.customName ?? (safe.ok ? safe.stateMachine.getState().customName : null) ?? "Pet";
+      const cmd = getDisplayCommand();
 
       ctx.ui.notify(
         [
@@ -84,7 +87,8 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
           `⚡ Energy:     ${bar(state.attributes.energy)} ${state.attributes.energy}%`,
           `💕 Affection:  ${bar(state.attributes.affection)} ${state.attributes.affection}%`,
           `Active time: ${formatDuration(state.totalActiveTime)}`,
-        ].join("\n"),
+          cmd ? `\n📺 Display command:\n  ${cmd}` : "",
+        ].filter(Boolean).join("\n"),
         "info",
       );
     },
@@ -150,9 +154,17 @@ export function registerCommands(pi: ExtensionAPI, deps: CommandDeps): void {
       if (switched) {
         const pet = registry.get(petId)!;
         safe.stateMachine.applyStimulus({ type: "user_switch" });
-        // Remount widget — may switch between ASCII and image renderer
         mountWidget(ctx);
-        ctx.ui.notify(`✨ Switched to ${pet.name}!`, "success");
+
+        const cmd = getDisplayCommand();
+        if (cmd) {
+          ctx.ui.notify(
+            `✨ Switched to ${pet.name}!\n📺 Display: ${cmd}`,
+            "success",
+          );
+        } else {
+          ctx.ui.notify(`✨ Switched to ${pet.name}!`, "success");
+        }
       } else {
         const available = registry.list().join(", ");
         ctx.ui.notify(`Pet "${petId}" not found. Available: ${available}`, "error");

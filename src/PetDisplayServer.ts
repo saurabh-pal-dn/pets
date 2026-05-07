@@ -13,11 +13,17 @@ import { randomBytes } from "node:crypto";
 
 export interface PetDisplayFrame {
   type: "frame";
+  /** "image" = Kitty protocol, "text" = ASCII/emoji lines */
+  mode: "image" | "text";
   emotion: string;
-  base64: string;
-  cols: number;
-  rows: number;
-  imageId: number;
+  // Image mode fields
+  base64?: string;
+  cols?: number;
+  rows?: number;
+  imageId?: number;
+  // Text mode fields
+  textLines?: string[];
+  // Status
   happiness: number;
   fullness: number;
   energy: number;

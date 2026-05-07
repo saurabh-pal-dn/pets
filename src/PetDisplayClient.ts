@@ -1,16 +1,14 @@
 /**
  * PetDisplayClient — runs in a separate terminal window.
  * Connects to the pi-pets server via Unix socket and renders
- * Kitty protocol images directly to stdout.
- *
- * Usage: npx tsx bin/pi-pets-display.ts <socket-path>
+ * frames directly to stdout. Supports both image (Kitty) and text modes.
  */
 
 import { createConnection } from "node:net";
 import { createInterface } from "node:readline";
 import type { PetDisplayMessage } from "./PetDisplayServer.js";
 
-// ─── Kitty encoder (a=T, C=0 — no cursor advancement) ───────
+// ─── Kitty encoder ──────────────────────────────────────────
 
 function encodeKittyFrame(
   base64: string,
@@ -18,11 +16,12 @@ function encodeKittyFrame(
   rows: number,
   imageId: number,
 ): string {
-  const params = [`a=T`, `C=0`, `f=100`, `q=2`, `c=${cols}`, `r=${rows}`, `i=${imageId}`];
+  // a=T: transmit & display, C=0: don't move cursor, q=1: quiet (no response)
+  const params = `a=T,C=0,f=100,q=1,c=${cols},r=${rows},i=${imageId}`;
   const CHUNK_SIZE = 4096;
 
   if (base64.length <= CHUNK_SIZE) {
-    return `\x1b_G${params.join(",")};${base64}\x1b\\`;
+    return `\x1b_G${params};${base64}\x1b\\`;
   }
 
   const parts: string[] = [];
@@ -32,7 +31,7 @@ function encodeKittyFrame(
     const chunk = base64.slice(offset, offset + CHUNK_SIZE);
     const last = offset + CHUNK_SIZE >= base64.length;
     if (first) {
-      parts.push(`\x1b_G${params.join(",")},m=1;${chunk}\x1b\\`);
+      parts.push(`\x1b_G${params},m=1;${chunk}\x1b\\`);
       first = false;
     } else if (last) {
       parts.push(`\x1b_Gm=0;${chunk}\x1b\\`);
@@ -44,38 +43,26 @@ function encodeKittyFrame(
   return parts.join("");
 }
 
-// ─── Status bar ─────────────────────────────────────────────
-
-function statusBar(happiness: number, fullness: number, energy: number): string {
-  const h = `♥${hbar(happiness)}`;
-  const f = `🍖${hbar(fullness)}`;
-  const e = `⚡${hbar(energy)}`;
-  return `${h}  ${f}  ${e}`;
+function deleteKittyImage(imageId: number): string {
+  // a=d: delete placement, d=I: delete by image ID
+  return `\x1b_Ga=d,d=I,i=${imageId}\x1b\\`;
 }
 
-function hbar(pct: number): string {
-  const w = 5;
-  const filled = Math.round((pct / 100) * w);
-  return `${"█".repeat(filled)}${"░".repeat(w - filled)} ${Math.round(pct)}%`;
-}
-
-// ─── Main ───────────────────────────────────────────────────
+// ─── Display client ─────────────────────────────────────────
 
 export function runDisplayClient(socketPath: string): void {
-  // Hide cursor, clear screen, enter alt screen
-  process.stdout.write("\x1b[?25l");   // hide cursor
-  process.stdout.write("\x1b[?1049h"); // enter alt screen
-  process.stdout.write("\x1b[2J");     // clear
+  // Hide cursor, enter alt screen, clear
+  process.stdout.write("\x1b[?25l");
+  process.stdout.write("\x1b[?1049h");
+  process.stdout.write("\x1b[2J");
 
-  // Ensure cursor is restored on exit
   const cleanup = () => {
-    process.stdout.write("\x1b[?1049l"); // exit alt screen
-    process.stdout.write("\x1b[?25h");   // show cursor
+    process.stdout.write("\x1b[?1049l");
+    process.stdout.write("\x1b[?25h");
     process.exit(0);
   };
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
-  process.on("exit", cleanup);
 
   const socket = createConnection(socketPath);
 
@@ -86,36 +73,51 @@ export function runDisplayClient(socketPath: string): void {
 
   const rl = createInterface({ input: socket, crlfDelay: Infinity });
 
+  // Track current image ID for explicit delete before frame
+  let currentImageId: number | null = null;
+  let isImageMode: boolean | null = null;
+
   rl.on("line", (line: string) => {
     let msg: PetDisplayMessage;
     try { msg = JSON.parse(line); } catch { return; }
 
-    if (msg.type === "close") {
-      cleanup();
-      return;
-    }
-
-    if (msg.type === "clear") {
-      process.stdout.write("\x1b[2J");
-      return;
-    }
+    if (msg.type === "close") { cleanup(); return; }
+    if (msg.type === "clear") { process.stdout.write("\x1b[2J"); return; }
 
     if (msg.type === "frame") {
-      // Move cursor to top-left
+      // Move to top-left
       process.stdout.write("\x1b[H");
 
-      // Emit Kitty image
-      const seq = encodeKittyFrame(msg.base64, msg.cols, msg.rows, msg.imageId);
-      process.stdout.write(seq);
+      if (msg.mode === "image" && msg.base64 && msg.imageId !== undefined) {
+        // Delete old image placement before rendering new frame (prevents stacking)
+        if (currentImageId !== null && currentImageId === msg.imageId) {
+          process.stdout.write(deleteKittyImage(msg.imageId));
+        }
 
-      // Move cursor below image
-      const cursorRow = msg.rows + 1;
-      process.stdout.write(`\x1b[${cursorRow};1H`);
+        const seq = encodeKittyFrame(msg.base64, msg.cols ?? 24, msg.rows ?? 12, msg.imageId);
+        process.stdout.write(seq);
+        currentImageId = msg.imageId;
+        isImageMode = true;
+
+        // Move cursor below image for status bar
+        process.stdout.write(`\x1b[${(msg.rows ?? 12) + 1};1H`);
+
+      } else if (msg.mode === "text" && msg.textLines) {
+        // Text mode (ASCII pets)
+        if (isImageMode && currentImageId !== null) {
+          process.stdout.write(deleteKittyImage(currentImageId));
+          currentImageId = null;
+        }
+        isImageMode = false;
+
+        for (const textLine of msg.textLines) {
+          process.stdout.write(textLine + "\r\n");
+        }
+      }
 
       // Status bar
-      process.stdout.write(statusBar(msg.happiness, msg.fullness, msg.energy));
-
-      // Ensure output is flushed
+      const bar = `${hbar("♥", msg.happiness)}  ${hbar("🍖", msg.fullness)}  ${hbar("⚡", msg.energy)}`;
+      process.stdout.write(bar + "\r\n");
     }
   });
 
@@ -123,4 +125,10 @@ export function runDisplayClient(socketPath: string): void {
   socket.on("end", cleanup);
 
   console.log(`pi-pets display — connected to ${socketPath}`);
+}
+
+function hbar(icon: string, pct: number): string {
+  const w = 5;
+  const filled = Math.round((pct / 100) * w);
+  return `${icon}${"█".repeat(filled)}${"░".repeat(w - filled)} ${Math.round(pct)}%`;
 }

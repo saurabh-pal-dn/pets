@@ -60,29 +60,44 @@ export default async function (pi: ExtensionAPI) {
 
   function sendDisplayFrame(): void {
     if (!displayServer || !displayServer.hasClients) return;
-    if (!animationEngine || !stateMachine || !imageCache) return;
+    if (!animationEngine || !stateMachine || !currentPet) return;
 
     const frame = animationEngine.getFrameData();
-    const frames = imageCache.getFrames(frame.emotion);
-    const imageId = imageCache.getImageId(frame.emotion);
-    if (!frames || imageId === undefined) return;
-
-    const base64 = frames[frame.frameIndex % frames.length]!;
     const state = stateMachine.getState();
+    const isImage = currentPet.spriteType === "image" && imageCache;
 
-    const msg: PetDisplayFrame = {
-      type: "frame",
-      emotion: frame.emotion,
-      base64,
-      cols: frameCols,
-      rows: frameRows,
-      imageId,
-      happiness: Math.round(state.attributes.happiness),
-      fullness: Math.round(100 - state.attributes.hunger),
-      energy: Math.round(state.attributes.energy),
-    };
+    if (isImage && imageCache) {
+      const frames = imageCache.getFrames(frame.emotion);
+      const imageId = imageCache.getImageId(frame.emotion);
+      if (!frames || imageId === undefined) return;
 
-    displayServer.sendFrame(msg);
+      const msg: PetDisplayFrame = {
+        type: "frame",
+        mode: "image",
+        emotion: frame.emotion,
+        base64: frames[frame.frameIndex % frames.length]!,
+        cols: frameCols,
+        rows: frameRows,
+        imageId,
+        happiness: Math.round(state.attributes.happiness),
+        fullness: Math.round(100 - state.attributes.hunger),
+        energy: Math.round(state.attributes.energy),
+      };
+      displayServer.sendFrame(msg);
+    } else {
+      // ASCII text mode
+      const animFrame = animationEngine.getCurrentFrame();
+      const msg: PetDisplayFrame = {
+        type: "frame",
+        mode: "text",
+        emotion: frame.emotion,
+        textLines: animFrame.lines,
+        happiness: Math.round(state.attributes.happiness),
+        fullness: Math.round(100 - state.attributes.hunger),
+        energy: Math.round(state.attributes.energy),
+      };
+      displayServer.sendFrame(msg);
+    }
   }
 
   function getDisplayCommand(): string {
@@ -137,21 +152,16 @@ export default async function (pi: ExtensionAPI) {
     const pet = registry.get(petId);
     if (!pet) return false;
 
-    const wasImage = currentPet?.spriteType === "image";
     const isImage = pet.spriteType === "image";
 
     currentPet = pet;
     animationEngine?.switchPet(pet);
     stateMachine?.applyStimulus({ type: "user_switch" });
 
-    // Manage display server
-    if (isImage && terminalHasImages === true && !wasImage) {
+    // Manage image cache
+    if (isImage && terminalHasImages === true) {
       imageCache = await buildImageCache(pet);
-      await startDisplayServer();
-    } else if (isImage && terminalHasImages === true) {
-      imageCache = await buildImageCache(pet);
-    } else if (!isImage && wasImage) {
-      await stopDisplayServer();
+    } else if (!isImage) {
       imageCache = null;
     }
 
@@ -250,8 +260,9 @@ export default async function (pi: ExtensionAPI) {
     // Init image cache & display server for image pets
     if (currentPet.spriteType === "image" && terminalHasImages === true) {
       imageCache = await buildImageCache(currentPet);
-      await startDisplayServer();
     }
+    // Always start display server — all pets render there when client connected
+    await startDisplayServer();
 
     // Init animation engine (frame callback → send display frame OR widget render)
     animationEngine = new PetAnimationEngine(currentPet, () => {
@@ -271,11 +282,8 @@ export default async function (pi: ExtensionAPI) {
     applyStimulus({ type: "session_start" });
 
     const mode = currentPet.spriteType === "image" && terminalHasImages === true ? "🖼️" : "📝";
-    const displayCmd = displayServer
-      ? `\n📺 Display command:\n  ${getDisplayCommand()}`
-      : "";
     ctx.ui.notify(
-      `${mode} pi-pets loaded! ${currentPet.name} is ready.${displayCmd}`,
+      `${mode} pi-pets loaded! ${currentPet.name} is ready.\n📺 Display: ${getDisplayCommand()}`,
       "info",
     );
   });
