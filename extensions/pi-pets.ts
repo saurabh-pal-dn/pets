@@ -95,7 +95,7 @@ export default async function (pi: ExtensionAPI) {
 
     if (isImage && imageCache) {
       const frames = imageCache.getFrames(frame.emotion);
-      const imageId = imageCache.getImageId(frame.emotion);
+      const imageId = imageCache.getImageId(frame.emotion, frame.frameIndex);
       if (!frames || imageId === undefined) return;
 
       const msg: PetDisplayFrame = {

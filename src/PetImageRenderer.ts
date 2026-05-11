@@ -2,9 +2,8 @@
  * PetImageRenderer — renders image-based pets in a pi widget
  * using raw Kitty protocol escape sequences.
  *
- * Uses a=p (put) with C=0 to place images at the current cursor
- * WITHOUT advancing the cursor. Same imageId across frames ensures
- * in-place replacement — no stacking, no scrolling.
+ * Uses a=T with C=1 and p=1 to place images at the cursor.
+ * Each frame gets a unique imageId per the Kitty spec — no caching glitches.
  */
 
 import {
@@ -20,21 +19,27 @@ import type { WidgetRef } from "./PetRenderer.js";
 
 export class ImageCache {
   private cache = new Map<string, string[]>();
-  private imageIds = new Map<string, number>();
+  /** emotion → array of unique imageIds (one per frame) */
+  private imageIds = new Map<string, number[]>();
 
   set(emotion: string, frames: string[], _mimeType: string): void {
     this.cache.set(emotion, frames);
-    if (!this.imageIds.has(emotion)) {
-      this.imageIds.set(emotion, allocateImageId());
+    // Allocate a unique imageId for EACH frame (not shared across the emotion)
+    const ids: number[] = [];
+    for (let i = 0; i < frames.length; i++) {
+      ids.push(allocateImageId());
     }
+    this.imageIds.set(emotion, ids);
   }
 
   getFrames(emotion: string): string[] | undefined {
     return this.cache.get(emotion) ?? this.cache.get("idle");
   }
 
-  getImageId(emotion: string): number | undefined {
-    return this.imageIds.get(emotion) ?? this.imageIds.get("idle");
+  getImageId(emotion: string, frameIndex: number): number | undefined {
+    const ids = this.imageIds.get(emotion) ?? this.imageIds.get("idle");
+    if (!ids || ids.length === 0) return undefined;
+    return ids[frameIndex % ids.length];
   }
 
   has(emotion: string): boolean {
@@ -52,14 +57,14 @@ function encodeKittyFrame(
   rows: number,
   imageId: number,
 ): string {
-  // a=T: transmit & display (replaces old placement of same imageId)
-  // C=0: don't move cursor after placing
-  // q=2: no display feedback
+  // a=T: transmit & display, C=1: move cursor after, p=1: placement ID
+  // q=1: quiet mode (no terminal response)
   const params = [
     `a=T`,
-    `C=0`,
+    `C=1`,
+    `p=1`,
     `f=100`,
-    `q=2`,
+    `q=1`,
     `c=${cols}`,
     `r=${rows}`,
     `i=${imageId}`,
@@ -106,16 +111,36 @@ export function createPetImageWidget(
   return (tui: { requestRender: () => void }) => {
     widgetRef.tui = tui;
 
+    // Track previous image ID per emotion for explicit delete-before-draw
+    const prevIds = new Map<string, number>();
+    let mounted = false;
+
     return {
       render: (width: number): string[] => {
         const frame = getFrame();
         const state = getState();
+        const frameIdx = frame.frameIndex;
         const frames = imageCache.getFrames(frame.emotion);
-        const imageId = imageCache.getImageId(frame.emotion);
+        const imageId = imageCache.getImageId(frame.emotion, frameIdx);
 
         if (!frames || frames.length === 0 || imageId === undefined) {
           return [""];
         }
+
+        const lines: string[] = [];
+
+        // On mount: delete all lingering images from previous sessions
+        if (!mounted) {
+          mounted = true;
+          lines.push(`\x1b_Ga=d,d=a\x1b\\`);
+        }
+
+        // Delete the PREVIOUS frame's placement for this emotion
+        const prevId = prevIds.get(frame.emotion);
+        if (prevId !== undefined && prevId !== imageId) {
+          lines.push(`\x1b_Ga=d,d=I,i=${prevId}\x1b\\`);
+        }
+        prevIds.set(frame.emotion, imageId);
 
         const base64 = frames[frame.frameIndex % frames.length]!;
         const dims = getImageDimensions(base64, "image/png") ?? {
@@ -133,11 +158,9 @@ export function createPetImageWidget(
         const cols = memoCols;
         const rows = memoRows;
 
-        // Generate Kitty escape sequence
+        // Generate Kitty escape sequence for the new frame
         const sequence = encodeKittyFrame(base64, cols, rows, imageId);
-
-        // Build output: image sequence + padding + status
-        const lines = [sequence];
+        lines.push(sequence);
 
         // Pad to fill image height (stable widget size, no re-layout)
         for (let i = 1; i < rows; i++) {
@@ -154,6 +177,8 @@ export function createPetImageWidget(
 
       invalidate: () => {
         memoWidth = -1; // force recalc on next render
+        // On unmount-ish: delete all images
+        // (Widget invalidate is called on theme changes; no true unmount hook exists)
       },
     };
   };
